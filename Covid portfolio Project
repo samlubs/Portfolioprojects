@@ -1,0 +1,148 @@
+select*
+From Portfolioproject..[covid deaths]
+Where continent is not null
+order by 3,4
+
+
+select location, date, total_cases, new_cases, total_deaths, population
+From Portfolioproject..[covid deaths]
+Where continent is not null
+order by 1,2
+
+....Looking at total_cases
+vs total_deaths 
+...Shows the likelyhood of dying of COVID when you get affected.
+
+select location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as deathpercentage
+From Portfolioproject..[covid deaths]
+Where location like'%states%'
+Where continent is not null
+order by 1,2
+
+
+..Looking at total_cases vs population
+...shows what percentage of population got COVID
+
+select location, date, population, total_cases, (total_cases/population)*100 as populationinfectedpercentage
+From Portfolioproject..[covid deaths]
+Where location like'%states%'
+Where continent is not null
+order by 1,2
+
+
+....Looking at countries
+with highest infection rate compared to population
+
+select location, population, MAX(total_cases) as highestinfectioncount, MAX((total_cases/population))*100 as percentpopulationinfected
+From Portfolioproject..[covid deaths]
+Where continent is not null
+Group by location,population
+order by percentpopulationinfected desc
+
+
+...showing countries
+with highest Death count per population
+
+
+Select location, MAX(total_deaths) as TotalDeathCount
+From Portfolioproject..[covid deaths]
+Where continent is not null
+Group by Location
+order by TotalDeathCount desc
+
+
+...LET
+BREAK
+THINGS DOWN BY CONTINENT
+
+showing the continents
+with the highest death count per popualation
+Select continent, MAX(cast(total_deaths as int)) as TotalDeathCount
+From Portfolioproject..[covid deaths]
+Where continent is not null
+Group by continent
+order by TotalDeathCount desc
+
+
+...Global numbers
+
+select date, SUM(new_cases)as total_cases, sum(new_deaths)as total_deaths, sum(new_deaths)/sum(new_cases)*100 as Deathpercentage
+From Portfolioproject..[covid deaths]
+Where continent is not null
+Group by date
+order by 1,2
+
+
+select SUM(new_cases)as total_cases, sum(new_deaths)as total_deaths, sum(new_deaths)/sum(new_cases)*100 as Deathpercentage
+From Portfolioproject..[covid deaths]
+Where continent is not null
+order by 1,2
+
+Looking at Total population Vs Vaccinations
+
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, 
+       SUM(vac.new_vaccinations) OVER (PARTITION BY dea.Location ORDER BY CAST(dea.location AS NVARCHAR(400)), dea.date) AS rollingpeoplevaccinated
+FROM Portfolioproject..[covid deaths] dea
+JOIN Portfolioproject..[covid vaccinations] vac
+ON dea.location = vac.location AND dea.date = vac.date
+WHERE dea.continent is not NULL
+ORDER BY 2,3
+
+
+USE CTE
+note:
+ORDER BY clause is not allowed in a CTE unless it is used with the TOP or OFFSET clauses, or the FOR XML clause. This is because the CTE is essentially a temporary result set that is used within a SELECT, INSERT, UPDATE, DELETE, or CREATE VIEW statement, and the order of the rows in the CTE cannot be guaranteed.
+To fix this error, you will need to remove the ORDER BY clause from the CTE and use it in a separate SELECT statement that follows the CTE.
+
+
+WITH popVSVac(continent,location,Date,Population,New_vaccinations, RollingpeopleVaccinated)
+AS 
+(
+    SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, 
+           SUM(vac.new_vaccinations) OVER (PARTITION BY dea.Location ORDER BY CAST(dea.location AS NVARCHAR(400)), dea.date) AS rollingpeoplevaccinated
+    FROM Portfolioproject..[covid deaths] dea
+    JOIN Portfolioproject..[covid vaccinations] vac
+    ON dea.location = vac.location AND dea.date = vac.date
+    WHERE dea.continent is not NULL
+)
+SELECT *, (rollingpeoplevaccinated/population)*100
+FROM popVSVac
+ORDER BY 2,3
+
+
+--TEMP TABLE
+
+DROP TABLE if exists percentagepopulationvaccinated
+CREATE TABLE percentpopulationvaccinated
+(
+    continent NVARCHAR(255),
+  location NVARCHAR(255),
+  date DATE,
+  population NVARCHAR(255),
+  new_vaccinations FLOAT,
+  rollingpeoplevaccinated FLOAT
+);
+
+INSERT INTO percentpopulationvaccinated (continent, location, date, population, new_vaccinations, rollingpeoplevaccinated)
+SELECT continent, location, date, population, new_vaccinations,
+       SUM(ISNULL(new_vaccinations, 0)) OVER (PARTITION BY location ORDER BY CAST(location AS NVARCHAR(400)), date) as rollingpeoplevaccinated
+FROM (
+    SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+    FROM Portfolioproject..[covid deaths] dea
+    JOIN Portfolioproject..[covid vaccinations] vac
+    ON dea.location = vac.location AND dea.date = vac.date
+    WHERE dea.continent is not NULL
+) t
+ORDER BY location, date;
+
+
+....creating view to store data for later visualisations
+
+CREATE VIEW percentagedeath AS
+select date, SUM(new_cases)as total_cases, 
+SUM(new_deaths)as total_deaths, 
+SUM(new_deaths)/sum(new_cases)*100 as Deathpercentage
+From Portfolioproject..[covid deaths]
+Where continent is not null
+Group by date
+
